@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Estilo de prueba para confirmar que funciona */
+body {
+  @apply bg-slate-900 text-white min-h-screen;
+  margin: 0;
+}

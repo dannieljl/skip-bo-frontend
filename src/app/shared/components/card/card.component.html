@@ -1,0 +1,26 @@
+<div [ngClass]="getCardStyles()"
+     class="w-full h-full rounded-lg border-2 shadow-lg flex flex-col items-center justify-center relative select-none overflow-hidden transition-all duration-300 text-white group">
+
+
+  @if (card) {
+    <span class="absolute top-1 left-2 text-[10px] font-black opacity-70 uppercase">
+      {{ displayValue }}
+    </span>
+
+    <div class="text-3xl font-black tracking-tighter drop-shadow-md">
+      {{ displayValue }}
+    </div>
+
+    @if (card?.isWild) {
+      <div class="absolute top-1 right-2">
+        <span class="text-[8px] font-black bg-black/20 px-1 rounded uppercase tracking-tighter">Wild</span>
+      </div>
+    }
+  } @else {
+    <div class="animate-pulse flex flex-col items-center opacity-20">
+      <span class="text-[8px] font-bold italic">SKIP-BO</span>
+    </div>
+  }
+
+  <div class="absolute -bottom-2 -right-2 w-12 h-12 bg-white/10 rounded-full blur-xl transition-colors"></div>
+</div>
