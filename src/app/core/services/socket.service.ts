@@ -24,8 +24,9 @@ export class SocketService {
   constructor() {
     this.socket = io(environment.apiUrl, {
       reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000
+      reconnectionAttempts: 10, // Aumentado para móviles
+      reconnectionDelay: 1000,
+      transports: ['websocket'] // Recomendado para evitar problemas de polling en reconexión
     });
     this.setupListeners();
   }
@@ -43,23 +44,24 @@ export class SocketService {
     return 'p_' + Math.random().toString(36).substring(2, 11);
   }
 
-  public refreshIdentity(): void {
+  // Ahora solo se usa si el usuario quiere "Cerrar Sesión" o limpiar datos
+  public forceNewIdentity(): void {
     this._playerId = this.generateNewId();
     localStorage.setItem('skipbo_player_id', this._playerId);
+    localStorage.removeItem('skipbo_current_game_id');
   }
 
   private setupListeners(): void {
     this.socket.on('connect', () => {
       console.log('✅ Socket conectado:', this.socket.id);
-      const savedGameId = localStorage.getItem('skipbo_current_game_id');
-      const savedName = localStorage.getItem('skipbo_player_name') || 'Jugador';
 
-      if (savedGameId) {
-        this.socket.emit('join_game', {
-          gameId: savedGameId,
-          playerId: this.PLAYER_ID,
-          playerName: savedName
-        });
+      const savedGameId = localStorage.getItem('skipbo_current_game_id');
+      const savedName = localStorage.getItem('skipbo_player_name');
+
+      // Si volvemos de segundo plano y había una partida, nos re-unimos automáticamente
+      if (savedGameId && savedName) {
+        console.log(`🔄 Reconectando a partida ${savedGameId}...`);
+        this.joinGame(savedGameId, savedName);
       }
     });
 
@@ -72,19 +74,27 @@ export class SocketService {
     this.socket.on('error', (msg: any) => {
       const errorMsg = typeof msg === 'string' ? msg : msg.message;
       this.errorSubject.next(errorMsg);
+
+      // Si el error es que la partida no existe, limpiamos el localstorage
+      if (errorMsg.includes('inexistente') || errorMsg.includes('No existe')) {
+        localStorage.removeItem('skipbo_current_game_id');
+      }
     });
 
     this.socket.on('disconnect', () => console.warn('⚠️ Socket desconectado'));
   }
 
   createGame(playerName: string, goalSize: number = 20) {
-    this.refreshIdentity(); // Genera nuevo ID para nueva partida
+    // ❌ ELIMINADO: this.refreshIdentity()
+    // Mantenemos el mismo PLAYER_ID para que si el socket parpadea al salir de la app,
+    // el servidor nos reconozca al volver.
     localStorage.setItem('skipbo_player_name', playerName);
     this.socket.emit('create_game', { playerId: this.PLAYER_ID, playerName, goalSize });
   }
 
   joinGame(gameId: string, playerName: string) {
     localStorage.setItem('skipbo_player_name', playerName);
+    localStorage.setItem('skipbo_current_game_id', gameId);
     this.socket.emit('join_game', { gameId, playerId: this.PLAYER_ID, playerName });
   }
 

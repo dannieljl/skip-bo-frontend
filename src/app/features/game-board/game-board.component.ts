@@ -21,6 +21,9 @@ export class GameBoardComponent implements OnInit, OnDestroy {
   public socketService = inject(SocketService);
   public gameState = toSignal(this.socketService.gameState$);
 
+  // Nueva señal para controlar UI de conexión
+  public isConnected = signal(true);
+
   public isCopied = signal(false);
   public selectedSource = signal<'hand' | 'goal' | 'discard' | null>(null);
   public selectedIndex = signal<number | null>(null);
@@ -33,6 +36,9 @@ export class GameBoardComponent implements OnInit, OnDestroy {
 
   public wasJustRecycled = false;
   private prevPending = 0;
+
+
+  private navigationTimeout: any;
 
   public isGameReady = computed(() => {
     const state = this.gameState();
@@ -51,30 +57,40 @@ export class GameBoardComponent implements OnInit, OnDestroy {
 
       if (state.status === 'finished' && state.winnerId && !this.showWinnerModal()) {
         const isMe = state.winnerId === state.me.id;
-        this.winnerName.set(isMe ? '¡TÚ!' : state.opponent.name);
+        this.winnerName.set(isMe ? '¡YOU!' : (state.opponent?.name || 'OPPONENT'));
         this.showWinnerModal.set(true);
         if (isMe) this.launchCelebration();
-        setTimeout(() => this.router.navigate(['/']), 6000);
+
+        // Limpiar partida de localStorage al terminar
+        localStorage.removeItem('skipbo_current_game_id');
+        this.navigationTimeout = setTimeout(() => this.router.navigate(['/']), 6000);
       }
       this.handleStateUpdate(state);
-    }, { allowSignalWrites: true });
+    });
   }
 
   ngOnInit() {
     this.errorSubscription = this.socketService.error$.subscribe(msg => this.showTemporaryError(msg));
 
-    // Solo forzar unión si volvemos y NO hay estado cargado
+    // Listeners para estado de conexión
+    this.socketService.socket.on('connect', () => this.isConnected.set(true));
+    this.socketService.socket.on('disconnect', () => this.isConnected.set(false));
+
+    // Forzar reconexión al volver a la pestaña
     this.document.addEventListener('visibilitychange', () => {
-      if (this.document.visibilityState === 'visible' && !this.gameState()) {
-        const gid = localStorage.getItem('skipbo_current_game_id');
-        const name = localStorage.getItem('skipbo_player_name') || 'Player';
-        if (gid) this.socketService.joinGame(gid, name);
+      if (this.document.visibilityState === 'visible') {
+        if (!this.socketService.socket.connected) {
+          console.log("📱 Recuperando conexión...");
+          this.socketService.socket.connect();
+        }
       }
     });
   }
 
   ngOnDestroy() {
     if (this.errorSubscription) this.errorSubscription.unsubscribe();
+    if (this.navigationTimeout) clearTimeout(this.navigationTimeout);
+   // No desconectamos el socket aquí para permitir reconexión rápida
   }
 
   selectFromHand(index: number, cardId: string) {
@@ -157,7 +173,9 @@ export class GameBoardComponent implements OnInit, OnDestroy {
       await navigator.clipboard.writeText(gameId);
       this.isCopied.set(true);
       setTimeout(() => this.isCopied.set(false), 2000);
-    } catch (err) {}
+    } catch (err) {
+      console.error("No se pudo copiar", err);
+    }
   }
 
   public showTemporaryError(msg: string) {
@@ -176,3 +194,8 @@ export class GameBoardComponent implements OnInit, OnDestroy {
     frame();
   }
 }
+
+
+
+
+
