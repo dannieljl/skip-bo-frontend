@@ -3,7 +3,7 @@
 
     <div class="text-center space-y-2">
       <h1 class="text-5xl font-black italic tracking-tighter text-orange-500">Skip-Bo</h1>
-      <p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.4em]">Multiplayer Online</p>
+      <p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.4em]">Online Multiplayer</p>
     </div>
 
     <div class="bg-slate-800/40 backdrop-blur-xl border border-white/10 p-8 rounded-[2.5rem] shadow-2xl space-y-6">
@@ -12,19 +12,19 @@
         <label class="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest">Nickname</label>
         <input type="text" [(ngModel)]="playerName"
                class="w-full bg-slate-900/50 border-2 border-slate-700/50 rounded-2xl py-4 px-5 text-lg font-bold focus:border-orange-500 outline-none transition-all"
-               placeholder="Set your name...">
+               placeholder="Enter your name...">
       </div>
 
       <div class="space-y-4 bg-slate-900/30 p-4 rounded-2xl border border-white/5">
         <div class="flex justify-between items-center px-1">
-          <label class="text-[10px] font-black uppercase text-slate-400 tracking-widest">Goal Cards</label>
+          <label class="text-[10px] font-black uppercase text-slate-400 tracking-widest">Target Cards</label>
           <span class="bg-orange-500 text-[#0f172a] text-sm font-black px-3 py-1 rounded-full">{{goalSize}}</span>
         </div>
         <input type="range" min="5" max="30" step="5" [(ngModel)]="goalSize"
                class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-orange-500 overflow-hidden">
         <div class="flex justify-between text-[8px] font-bold text-slate-600 px-1">
-          <span>EASY (5)</span>
-          <span>PRO (30)</span>
+          <span>Beginner (5)</span>
+          <span>Expert (30)</span>
         </div>
       </div>
 
@@ -35,21 +35,21 @@
 
       <div class="flex items-center gap-4 py-2 opacity-30">
         <div class="h-[1px] flex-1 bg-slate-500"></div>
-        <span class="text-[8px] font-black uppercase">Or Join with code</span>
+        <span class="text-[8px] font-black uppercase">Or Join with a code</span>
         <div class="h-[1px] flex-1 bg-slate-500"></div>
       </div>
 
       <div class="flex gap-2">
         <input type="text" [(ngModel)]="gameIdToJoin"
                class="flex-1 bg-slate-900/50 border border-slate-700/50 rounded-xl py-3 px-4 text-xs font-mono text-orange-400 uppercase tracking-tighter outline-none focus:border-slate-500"
-               placeholder="Code...">
+               placeholder="Enter code...">
         <button (click)="joinExistingGame()" [disabled]="!playerName || !gameIdToJoin"
                 class="px-6 bg-slate-700 hover:bg-slate-600 disabled:opacity-20 rounded-xl font-bold text-xs uppercase transition-all active:scale-95">
-          OK
+          Join
         </button>
       </div>
     </div>
 
-    <p class="text-center text-slate-600 text-[9px] font-bold uppercase tracking-widest">v1.0.2 - Tailwind UI</p>
+    <p class="text-center text-slate-600 text-[9px] font-bold uppercase tracking-widest">v1.0.7 - DESSING DANNJL</p>
   </div>
 </div>
