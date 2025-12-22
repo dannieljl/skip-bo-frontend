@@ -1,6 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { io, Socket } from 'socket.io-client';
-import {BehaviorSubject, Subject} from 'rxjs';
+import { BehaviorSubject, Subject } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { GameState, MoveData } from '../models/game.model';
 import { Router } from '@angular/router';
@@ -14,11 +14,19 @@ export class SocketService {
 
   private gameStateSubject = new BehaviorSubject<GameState | null>(null);
   public gameState$ = this.gameStateSubject.asObservable();
+
   private errorSubject = new Subject<string>();
-  public error$ = this.errorSubject.asObservable(); // El componente se suscribirá a esto
-  private readonly PLAYER_ID = this.getOrCreatePlayerId();
+  public error$ = this.errorSubject.asObservable();
+
+  public readonly PLAYER_ID = this.getOrCreatePlayerId();
+
   constructor() {
-    this.socket = io(environment.apiUrl);
+    // Configuración de reconexión automática para Socket.io
+    this.socket = io(environment.apiUrl, {
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+    });
     this.setupListeners();
   }
 
@@ -33,58 +41,74 @@ export class SocketService {
 
   private setupListeners(): void {
     this.socket.on('connect', () => {
-      console.log('✅ Conectado al servidor de Skip-Bo');
-      const currentState = this.gameStateSubject.value;
+      console.log('✅ Connected to server. ID:', this.socket.id);
 
-      // Si ya estábamos en un juego, pedir actualización al reconectar
-      if (currentState?.gameId) {
-        this.socket.emit('join_game', {
-          gameId: currentState.gameId,
-          playerId: this.PLAYER_ID,
-          playerName: currentState.me.name
+      // Intentar recuperar sesión si existía una partida previa
+      const savedGameId = localStorage.getItem('skipbo_current_game_id');
+      if (savedGameId) {
+        console.log('🔄 Attempting to restore session for game:', savedGameId);
+        this.socket.emit('restore_session', {
+          gameId: savedGameId,
+          playerId: this.PLAYER_ID
         });
       }
     });
 
     this.socket.on('game_state', (state: GameState) => {
+      // Guardamos datos críticos en localStorage para soportar cierres de app
+      localStorage.setItem('skipbo_current_game_id', state.gameId);
+      localStorage.setItem('skipbo_player_name', state.me.name);
+
       this.inspectState(state);
       this.gameStateSubject.next(state);
     });
 
+    this.socket.on('session_expired', () => {
+      console.warn('⚠️ Session expired');
+      localStorage.removeItem('skipbo_current_game_id');
+      this.gameStateSubject.next(null);
+      this.router.navigate(['/']);
+    });
+
     this.socket.on('error', (msg: any) => {
       const errorMsg = typeof msg === 'string' ? msg : msg.message;
-      console.error('❌ Error del Servidor:', errorMsg);
-
+      console.error('❌ Server Error:', errorMsg);
       if ('vibrate' in navigator) navigator.vibrate(200);
-
-      // 2. Emitimos el error a través del Subject
       this.errorSubject.next(errorMsg);
     });
 
-    this.socket.on('disconnect', () => {
-      console.warn('⚠️ Desconectado del servidor');
+    this.socket.on('disconnect', (reason) => {
+      console.warn('⚠️ Disconnected:', reason);
     });
   }
 
   createGame(playerName: string, goalSize: number = 20) {
-    this.socket.emit('create_game', {playerId: this.PLAYER_ID, playerName, goalSize });
+    this.socket.emit('create_game', {
+      playerId: this.PLAYER_ID,
+      playerName,
+      goalSize
+    });
   }
 
   joinGame(gameId: string, playerName: string) {
-    console.log(`📡 Solicitando unirse a: ${gameId}`);
-    this.socket.emit('join_game', { gameId,playerId: this.PLAYER_ID, playerName });
+    console.log(`📡 Joining game: ${gameId}`);
+    this.socket.emit('join_game', {
+      gameId,
+      playerId: this.PLAYER_ID,
+      playerName
+    });
   }
 
   /**
-   * Envía una jugada al tablero central
+   * Envía una jugada al tablero central usando PLAYER_ID persistente
    */
   playCard(move: Omit<MoveData, 'gameId' | 'playerId'>) {
     const currentState = this.currentGameState;
 
-    if (currentState && this.socket.id) {
-      const fullMove: MoveData = {
+    if (currentState) {
+      const fullMove = {
         gameId: currentState.gameId,
-        playerId: this.socket.id,
+        playerId: this.PLAYER_ID, // CRÍTICO: Usar ID persistente, no socket.id
         ...move
       };
       this.socket.emit('play_card', fullMove);
@@ -92,41 +116,40 @@ export class SocketService {
   }
 
   /**
-   * NUEVO MÉTODO: Envía un descarte al servidor
-   * El descarte siempre termina el turno en Skip-Bo.
+   * Envía un descarte usando PLAYER_ID persistente
    */
   discard(targetIndex: number, cardId: string) {
     const currentState = this.gameStateSubject.value;
 
-    if (currentState && this.socket.id) {
+    if (currentState) {
       this.socket.emit('discard_card', {
         gameId: currentState.gameId,
-        playerId: this.socket.id, // Enviamos quién descarta
+        playerId: this.PLAYER_ID, // CRÍTICO: Usar ID persistente
         cardId: cardId,
         targetIndex: targetIndex
       });
-    } else {
-      console.error('No se puede descartar: Estado o Socket no disponibles');
     }
   }
 
   private inspectState(state: GameState): void {
-    console.group('🔍 INSPECCIÓN DE ESTADO');
-    console.log('ID Partida:', state.gameId);
-
+    console.group('🔍 STATE INSPECTION');
+    console.log('Game ID:', state.gameId);
     if (state.opponent && state.opponent.id !== 'Opponent') {
-      console.log('✅ Oponente Real:', state.opponent.name, `(${state.opponent.id})`);
-    } else {
-      console.warn('⏳ Esperando oponente real (estado actual: null o placeholder)');
+      console.log('✅ Opponent:', state.opponent.name, `(${state.opponent.id})`);
     }
-
-    console.log('Cartas en mazo:', state.drawPileCount);
+    console.log('My ID (Persistent):', this.PLAYER_ID);
     console.groupEnd();
   }
 
   public get currentGameState(): GameState | null {
     return this.gameStateSubject.value;
   }
+
+  /**
+   * Limpia la sesión local (útil para el botón de salir o al terminar)
+   */
+  clearSession() {
+    localStorage.removeItem('skipbo_current_game_id');
+    this.gameStateSubject.next(null);
   }
-
-
+}
