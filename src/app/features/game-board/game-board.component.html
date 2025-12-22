@@ -2,8 +2,8 @@
 
   @if (gameState(); as state) {
 
-    <div [class.blur-md]="!isGameReady()"
-         [class.pointer-events-none]="!isGameReady()"
+    <div [class.blur-md]="!isGameReady() || !state"
+         [class.pointer-events-none]="!isGameReady() || !isMyTurn() || !state"
          class="flex flex-col flex-1 transition-all duration-700 ease-in-out">
 
       <header class="p-4 flex justify-between items-center">
