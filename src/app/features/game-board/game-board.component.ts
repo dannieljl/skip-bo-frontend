@@ -108,6 +108,9 @@ export class GameBoardComponent implements OnInit, OnDestroy {
       this.showTemporaryError(msg);
     });
 
+    const myId = (this.socketService as any).PLAYER_ID;
+    this.showTemporaryError(`MY ID: ${myId}`);
+
     this.document.addEventListener('visibilitychange', () => {
       if (this.document.visibilityState === 'visible') {
         const state = this.gameState();
