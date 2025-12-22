@@ -7,6 +7,8 @@ import { CardComponent } from '../../shared/components/card/card.component';
 import { GameState } from '../../core/models/game.model.js';
 import { Subscription } from 'rxjs';
 import confetti from 'canvas-confetti';
+import { DOCUMENT } from '@angular/common';
+
 @Component({
   selector: 'game-board',
   standalone: true,
@@ -16,6 +18,9 @@ import confetti from 'canvas-confetti';
 
 })
 export class GameBoardComponent implements OnInit, OnDestroy {
+
+  private document = inject(DOCUMENT);
+
   // --- INYECCIONES Y SERVICIOS ---
   private router = inject(Router);
   public socketService = inject(SocketService);
@@ -63,6 +68,7 @@ export class GameBoardComponent implements OnInit, OnDestroy {
         this.winnerName.set(isMe ? '¡YOU!' : state.opponent.name);
         this.showWinnerModal.set(true);
 
+
         // Regresar al lobby automáticamente en 5 segundos
         setTimeout(() => {
           this.router.navigate(['/']);
@@ -101,6 +107,17 @@ export class GameBoardComponent implements OnInit, OnDestroy {
     this.errorSubscription = this.socketService.error$.subscribe(msg => {
       this.showTemporaryError(msg);
     });
+
+    this.document.addEventListener('visibilitychange', () => {
+      if (this.document.visibilityState === 'visible') {
+        const state = this.gameState();
+        if (state) {
+          // Forzamos al socket a pedir el estado actual
+          this.socketService.joinGame(state.gameId, state.me.name);
+        }
+      }
+    });
+
   }
 
   ngOnDestroy() {
