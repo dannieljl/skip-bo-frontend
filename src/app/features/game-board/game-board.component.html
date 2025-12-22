@@ -12,7 +12,7 @@
           <span [class.bg-green-500]="state.currentPlayerId === state.me.id"
                 [class.bg-slate-700]="state.currentPlayerId !== state.me.id"
                 class="px-4 py-1 rounded-full text-[10px] font-bold uppercase shadow-lg transition-colors animate-in fade-in">
-            {{ state.currentPlayerId === state.me.id ? 'TU TURNO' : 'OPONENTE' }}
+            {{ state.currentPlayerId === state.me.id ? 'YOUR TURN' : 'OPPONENT TURN' }}
           </span>
           @if (state) {
             <div [class]="getPileCounterClass()"
@@ -246,14 +246,14 @@
             <div class="absolute inset-0 border-4 border-orange-500/20 rounded-full"></div>
             <div class="absolute inset-0 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
           </div>
-          <h2 class="text-lg font-black mb-1 uppercase tracking-tighter">Esperando Rival</h2>
-          <p class="text-slate-400 text-[10px] mb-6 font-medium px-4 uppercase tracking-widest">Código de la sala</p>
+          <h2 class="text-lg font-black mb-1 uppercase tracking-tighter">Waiting Opponent</h2>
+          <p class="text-slate-400 text-[10px] mb-6 font-medium px-4 uppercase tracking-widest">Code of the room</p>
 
           <div class="bg-slate-900 py-3 px-4 rounded-xl border border-white/5 flex items-center justify-between mb-2">
             <span class="font-mono text-orange-400 font-bold tracking-widest uppercase text-sm">{{ state.gameId }}</span>
             <button (click)="copyCode(state.gameId)" class="relative p-2 active:scale-90 transition-transform">
               @if (isCopied()) {
-                <span class="text-[10px] font-bold text-green-500 animate-pulse uppercase">¡Copiado!</span>
+                <span class="text-[10px] font-bold text-green-500 animate-pulse uppercase">¡Copy!</span>
               } @else {
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-500 active:text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -267,7 +267,7 @@
 
   } @else {
     <div class="flex items-center justify-center h-screen bg-[#0f172a]">
-      <div class="animate-pulse text-orange-500 font-black tracking-widest text-xs uppercase">Sincronizando...</div>
+      <div class="animate-pulse text-orange-500 font-black tracking-widest text-xs uppercase">Synchronization...</div>
     </div>
   }
 </div>
@@ -279,3 +279,39 @@
     </div>
   </div>
 }
+
+
+
+
+@if (showWinnerModal()) {
+  <div class="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 backdrop-blur-md px-4">
+
+    <div class="animate-modal-entry bg-slate-900 border-2 border-yellow-500 p-10 rounded-3xl shadow-[0_0_50px_rgba(234,179,8,0.3)] text-center max-w-sm w-full relative overflow-hidden">
+
+      <div class="absolute -top-24 -left-24 w-48 h-48 bg-yellow-500/10 blur-3xl rounded-full"></div>
+
+      <div class="text-7xl mb-6 drop-shadow-lg">
+        {{ winnerName() === 'YOU!' ? '🏆' : '🤡' }}
+      </div>
+
+      <h2 class="text-5xl font-black text-white mb-2 tracking-tighter italic">
+        {{ winnerName() === 'YOU!' ? 'VICTORY!' : 'GAME OVER' }}
+      </h2>
+
+      <p class="text-lg text-slate-400 mb-8 font-medium">
+        The winner is <span class="text-yellow-400 font-bold underline decoration-2 underline-offset-4">{{ winnerName() }}</span>
+      </p>
+
+      <div class="relative w-full bg-slate-800 rounded-full h-3 mb-4 overflow-hidden shadow-inner">
+        <div class="bg-gradient-to-r from-yellow-600 via-yellow-400 to-yellow-600 h-full animate-progress-bar shadow-[0_0_10px_rgba(234,179,8,0.5)]"></div>
+      </div>
+
+      <div class="flex items-center justify-center gap-2 text-slate-500 text-xs font-bold uppercase tracking-widest">
+        <span class="inline-block w-2 h-2 bg-slate-600 rounded-full animate-pulse"></span>
+        Returning to lobby...
+      </div>
+    </div>
+
+  </div>
+}
+

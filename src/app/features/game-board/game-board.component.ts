@@ -1,12 +1,12 @@
-import {inject, computed, signal, Component, OnInit, OnDestroy} from '@angular/core';
+import { inject, computed, signal, Component, OnInit, OnDestroy, effect } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
+import { Router } from '@angular/router';
 import { SocketService } from '../../core/services/socket.service';
 import { CommonModule } from '@angular/common';
 import { CardComponent } from '../../shared/components/card/card.component';
-import {GameState} from '../../core/models/game.model.js';
-import {Subscription} from 'rxjs'; // Ajusta la ruta si es necesario
-import {trigger, transition, style, animate, query, stagger, group} from '@angular/animations';
-
+import { GameState } from '../../core/models/game.model.js';
+import { Subscription } from 'rxjs';
+import confetti from 'canvas-confetti';
 @Component({
   selector: 'game-board',
   standalone: true,
@@ -15,26 +15,34 @@ import {trigger, transition, style, animate, query, stagger, group} from '@angul
   styleUrl: './game-board.component.scss',
 
 })
-export class GameBoardComponent  implements OnInit, OnDestroy{
-  public gameErrorMessage: string | null = null;
-  private errorSubscription!: Subscription;
-
+export class GameBoardComponent implements OnInit, OnDestroy {
+  // --- INYECCIONES Y SERVICIOS ---
+  private router = inject(Router);
   public socketService = inject(SocketService);
   public gameState = toSignal(this.socketService.gameState$);
 
-  // Señales de UI
+  // --- SEÑALES DE UI Y SELECCIÓN ---
   public isCopied = signal(false);
-
-  // Señales de Selección
   public selectedSource = signal<'hand' | 'goal' | 'discard' | null>(null);
   public selectedIndex = signal<number | null>(null);
   public selectedCardId = signal<string | null>(null);
 
-  // Computados
+  // SEÑALES PARA EL FIN DEL JUEGO
+  public showWinnerModal = signal(false);
+  public winnerName = signal<string>('');
+
+  // --- LÓGICA DE ERRORES ---
+  public gameErrorMessage: string | null = null;
+  private errorSubscription!: Subscription;
+
+  // --- LÓGICA DE COLORES Y RECICLAJE ---
+  public state!: GameState;
+  public wasJustRecycled: boolean = false;
+  private prevPending: number = 0;
+
+  // --- COMPUTADOS ---
   public isGameReady = computed(() => {
     const state = this.gameState();
-    // Validamos que exista oponente y no sea el placeholder
-   console.log(state);
     return !!state?.opponent && state.opponent.id !== 'Opponent';
   });
 
@@ -43,46 +51,93 @@ export class GameBoardComponent  implements OnInit, OnDestroy{
     return state?.currentPlayerId === state?.me.id;
   });
 
+  constructor() {
+    // EFFECT: Detecta cambios en el estado del juego para victoria o reciclaje
+    effect(() => {
+      const state = this.gameState();
+      if (!state) return;
+
+      // 1. Detección de Ganador
+      if (state.status === 'finished' && state.winnerId) {
+        const isMe = state.winnerId === state.me.id;
+        this.winnerName.set(isMe ? '¡YOU!' : state.opponent.name);
+        this.showWinnerModal.set(true);
+
+        // Regresar al lobby automáticamente en 5 segundos
+        setTimeout(() => {
+          this.router.navigate(['/']);
+        }, 5000);
+      }
+
+      // 2. Manejo visual de reciclaje de cartas
+      this.handleStateUpdate(state);
+    }, { allowSignalWrites: true });
+
+
+    effect(() => {
+      const state = this.gameState();
+      if (!state) return;
+
+      if (state.status === 'finished' && state.winnerId) {
+        const isMe = state.winnerId === state.me.id;
+        this.winnerName.set(isMe ? '¡TÚ!' : state.opponent.name);
+        this.showWinnerModal.set(true);
+
+        // LANZAR CONFETI SI GANASTE
+        if (isMe) {
+          this.launchCelebration();
+        }
+
+        setTimeout(() => {
+          this.router.navigate(['/']);
+        }, 5000);
+      }
+
+      this.handleStateUpdate(state);
+    }, { allowSignalWrites: true });
+  }
+
+  ngOnInit() {
+    this.errorSubscription = this.socketService.error$.subscribe(msg => {
+      this.showTemporaryError(msg);
+    });
+  }
+
+  ngOnDestroy() {
+    if (this.errorSubscription) {
+      this.errorSubscription.unsubscribe();
+    }
+  }
+
   // --- MÉTODOS DE SELECCIÓN (ORIGEN) ---
 
-  // 1. Seleccionar desde la Mano
   selectFromHand(index: number, cardId: string) {
-    if (!this.isMyTurn()) return; // Solo puedes seleccionar si es tu turno
+    if (!this.isMyTurn() || this.showWinnerModal()) return;
     this.setSelection('hand', index, cardId);
   }
 
-  // 2. Seleccionar desde el Objetivo (Stock)
   selectFromGoal() {
-    if (!this.isMyTurn()) return;
+    if (!this.isMyTurn() || this.showWinnerModal()) return;
     const state = this.gameState();
     if (!state || state.me.goalPile.length === 0) return;
-
     const card = state.me.goalPile[state.me.goalPile.length - 1];
     this.setSelection('goal', 0, card.id);
   }
 
-  // 3. Seleccionar desde un Descarte (Para jugar al centro)
   selectFromDiscard(slotIndex: number) {
-    if (!this.isMyTurn()) return;
+    if (!this.isMyTurn() || this.showWinnerModal()) return;
     const state = this.gameState();
-
-    // Solo permitimos seleccionar si hay cartas en ese slot
     if (!state || state.me.discards[slotIndex].length === 0) return;
-
     const slot = state.me.discards[slotIndex];
     const topCard = slot[slot.length - 1];
-
     this.setSelection('discard', slotIndex, topCard.id);
   }
 
-  // Helper para centralizar la selección y vibración
   private setSelection(source: 'hand' | 'goal' | 'discard', index: number, cardId: string) {
-    // Si toco la misma carta, la deselecciono
     if (this.selectedCardId() === cardId) {
       this.clearSelection();
       return;
     }
-
     this.selectedSource.set(source);
     this.selectedIndex.set(index);
     this.selectedCardId.set(cardId);
@@ -91,47 +146,53 @@ export class GameBoardComponent  implements OnInit, OnDestroy{
 
   // --- MÉTODOS DE ACCIÓN (DESTINO) ---
 
-  // 4. Jugar carta en Tablero Central (Common Pile)
   onCommonPileClick(targetIndex: number) {
-    if (!this.isMyTurn()) return;
-
+    if (!this.isMyTurn() || this.showWinnerModal()) return;
     const source = this.selectedSource();
     const cardId = this.selectedCardId();
 
     if (source && cardId) {
-
       this.socketService.playCard({
         cardId: cardId,
         source: source,
         targetIndex: targetIndex,
-        // Si viene del descarte, necesitamos saber de qué slot salió
         sourceIndex: source === 'discard' ? this.selectedIndex()! : undefined
       });
-
       this.clearSelection();
     }
   }
 
-  // 5. Manejo de clics en Descartes (Puede ser Destino u Origen)
   onDiscardSlotClick(slotIndex: number) {
-    if (!this.isMyTurn()) return;
-
+    if (!this.isMyTurn() || this.showWinnerModal()) return;
     const source = this.selectedSource();
     const cardId = this.selectedCardId();
 
-    // CASO A: Estoy descartando desde mi mano (DESTINO)
     if (source === 'hand' && cardId) {
       this.socketService.discard(slotIndex, cardId);
       this.clearSelection();
       return;
     }
-
-    // CASO B: Quiero seleccionar esta pila para jugar (ORIGEN)
-    // No se puede mover Goal -> Discard ni Discard -> Discard, así que esto es seguro
     this.selectFromDiscard(slotIndex);
   }
 
-  // Utilidades
+  // --- UTILIDADES Y UI ---
+
+  handleStateUpdate(newState: GameState) {
+    if (this.prevPending >= 2 && newState.pilesToRecycleCount === 0) {
+      this.wasJustRecycled = true;
+      setTimeout(() => this.wasJustRecycled = false, 2500);
+    }
+    this.state = newState;
+    this.prevPending = newState.pilesToRecycleCount;
+  }
+
+  getPileCounterClass() {
+    if (!this.state) return 'bg-slate-800 border-white/10 text-pink-500';
+    if (this.wasJustRecycled) return 'bg-green-600 border-green-400 text-white scale-110 shadow-green-500/50';
+    if (this.state.pilesToRecycleCount >= 2) return 'bg-red-600 border-red-400 text-white animate-pulse shadow-red-500/30';
+    return 'bg-slate-800 border-white/10 text-pink-500';
+  }
+
   clearSelection() {
     this.selectedSource.set(null);
     this.selectedIndex.set(null);
@@ -149,59 +210,6 @@ export class GameBoardComponent  implements OnInit, OnDestroy{
     }
   }
 
-  // Variables para controlar la animación
-  wasJustRecycled: boolean = false;
-  private prevPending: number = 0;
-  public state!: GameState;
-// Lógica de colores dinámica
-  getPileCounterClass() {
-    // 1. Blindaje: Si state no existe todavía, devuelve la clase base y sal de la función
-    if (!this.state) {
-      return 'bg-slate-800 border-white/10 text-pink-500';
-    }
-
-    // 2. Lógica de reciclaje (Prioridad máxima)
-    if (this.wasJustRecycled) {
-      return 'bg-green-600 border-green-400 text-white scale-110 shadow-green-500/50';
-    }
-
-    // 3. Lógica de alerta (2 pilas acumuladas)
-    // Ahora es seguro acceder a this.state.pilesToRecycleCount
-    if (this.state.pilesToRecycleCount >= 2) {
-      return 'bg-red-600 border-red-400 text-white animate-pulse shadow-red-500/30';
-    }
-
-    // 4. Estado normal
-    return 'bg-slate-800 border-white/10 text-pink-500';
-  }
-
-// Lógica para detectar el cambio (pon esto donde recibes el socket del estado)
-  handleStateUpdate(newState: GameState) {
-    // Si antes teníamos 2 pilas y ahora 0, es que se barajó
-    if (this.prevPending >= 2 && newState.pilesToRecycleCount === 0) {
-      this.wasJustRecycled = true;
-      setTimeout(() => this.wasJustRecycled = false, 2500); // 2.5 seg en verde
-    }
-
-    this.state = newState;
-    this.prevPending = newState.pilesToRecycleCount;
-  }
-
-  ngOnInit() {
-    // 3. Nos suscribimos al canal de errores
-    this.errorSubscription = this.socketService.error$.subscribe(msg => {
-      this.showTemporaryError(msg);
-    });
-  }
-
-  ngOnDestroy() {
-    // Muy importante para evitar fugas de memoria
-    if (this.errorSubscription) {
-      this.errorSubscription.unsubscribe();
-    }
-  }
-
-
   public showTemporaryError(msg: string) {
     this.gameErrorMessage = msg;
     setTimeout(() => {
@@ -209,4 +217,31 @@ export class GameBoardComponent  implements OnInit, OnDestroy{
     }, 3000);
   }
 
+
+  private launchCelebration() {
+    const duration = 3 * 1000;
+    const end = Date.now() + duration;
+
+    const frame = () => {
+      confetti({
+        particleCount: 3,
+        angle: 60,
+        spread: 55,
+        origin: { x: 0 },
+        colors: ['#EAB308', '#22C55E', '#3B82F6'] // Colores de las cartas Skip-Bo
+      });
+      confetti({
+        particleCount: 3,
+        angle: 120,
+        spread: 55,
+        origin: { x: 1 },
+        colors: ['#EAB308', '#22C55E', '#3B82F6']
+      });
+
+      if (Date.now() < end) {
+        requestAnimationFrame(frame);
+      }
+    };
+    frame();
+  }
 }

@@ -70,3 +70,24 @@
   transform: scale(1.05) translateY(-5px) !important;
   z-index: 50;
 }
+
+
+// Animación de entrada (Pop-in)
+
+@keyframes modal-pop-in {
+  0% { opacity: 0; transform: scale(0.8); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes progress {
+  from { width: 0%; }
+  to { width: 100%; }
+}
+
+.animate-modal-entry {
+  animation: modal-pop-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.animate-progress-bar {
+  animation: progress 5s linear forwards;
+}

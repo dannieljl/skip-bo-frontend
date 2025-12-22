@@ -23,6 +23,7 @@ export interface GameState {
   me: PlayerInfo;        // Tus datos
   opponent: any;         // Datos del oponente
   pilesToRecycleCount: number;
+  winnerId?: string;
 }
 
 export interface MoveData {
