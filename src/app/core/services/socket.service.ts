@@ -16,15 +16,34 @@ export class SocketService {
   public gameState$ = this.gameStateSubject.asObservable();
   private errorSubject = new Subject<string>();
   public error$ = this.errorSubject.asObservable(); // El componente se suscribirá a esto
-
+  private readonly PLAYER_ID = this.getOrCreatePlayerId();
   constructor() {
     this.socket = io(environment.apiUrl);
     this.setupListeners();
   }
 
+  private getOrCreatePlayerId(): string {
+    let id = localStorage.getItem('skipbo_player_id');
+    if (!id) {
+      id = 'p_' + Math.random().toString(36).substring(2, 11);
+      localStorage.setItem('skipbo_player_id', id);
+    }
+    return id;
+  }
+
   private setupListeners(): void {
     this.socket.on('connect', () => {
       console.log('✅ Conectado al servidor de Skip-Bo');
+      const currentState = this.gameStateSubject.value;
+
+      // Si ya estábamos en un juego, pedir actualización al reconectar
+      if (currentState?.gameId) {
+        this.socket.emit('join_game', {
+          gameId: currentState.gameId,
+          playerId: this.PLAYER_ID,
+          playerName: currentState.me.name
+        });
+      }
     });
 
     this.socket.on('game_state', (state: GameState) => {
@@ -48,12 +67,12 @@ export class SocketService {
   }
 
   createGame(playerName: string, goalSize: number = 20) {
-    this.socket.emit('create_game', { playerName, goalSize });
+    this.socket.emit('create_game', {playerId: this.PLAYER_ID, playerName, goalSize });
   }
 
   joinGame(gameId: string, playerName: string) {
     console.log(`📡 Solicitando unirse a: ${gameId}`);
-    this.socket.emit('join_game', { gameId, playerName });
+    this.socket.emit('join_game', { gameId,playerId: this.PLAYER_ID, playerName });
   }
 
   /**
