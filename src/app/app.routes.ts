@@ -5,5 +5,6 @@ export const routes: Routes = [
 
   { path: 'lobby', component: LobbyComponent },
   { path: 'game/:id', component: GameBoardComponent },
-  { path: '', redirectTo: '/lobby', pathMatch: 'full' }
+  { path: '', redirectTo: '/lobby', pathMatch: 'full' },
+  { path: '**', redirectTo: '/lobby' }
 ];
