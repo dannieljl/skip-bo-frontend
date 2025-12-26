@@ -21,7 +21,7 @@ export interface GameState {
   drawPileCount: number;
   commonPiles: Card[][]; // Las 4 pilas del centro
   me: PlayerInfo;        // Tus datos
-  opponent: any;         // Datos del oponente
+  opponent: PlayerInfo | null;         // Datos del oponente
   pilesToRecycleCount: number;
   winnerId?: string;
 }

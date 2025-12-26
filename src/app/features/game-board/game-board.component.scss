@@ -1,93 +1,207 @@
-/* 1. Utilidades de Layout */
-.safe-top {
-  padding-top: env(safe-area-inset-top);
+@use "sass:list";
+
+:host {
+  position: fixed;
+  inset: 0;
+
+  // CAMBIO 1: Usar % en lugar de vw para evitar desbordes laterales fantasmas
+  width: 100%;
+
+  // CAMBIO 2: Cascada de alturas para robustez
+  height: 100vh;                            // Fallback prehistórico
+  height: calc(var(--vh, 1vh) * 100);       // Tu fix de JS (Fallback intermedio)
+  height: 100dvh;                           // ESTÁNDAR MODERNO (Arregla iPhone 13 nativamente)
+
+  overflow: hidden;
+  touch-action: none; // Evita gestos del navegador (zoom, swipe back)
+  transform: translateZ(0); // Fuerza aceleración de hardware
+
+  // Asegura que el fondo cubra todo y no haya "blancos" al rebotar
+  background-color: #0f172a; // O el color de fondo de tu juego
 }
 
-.safe-bottom {
-  padding-bottom: env(safe-area-inset-bottom);
+// Optimización base: evitar cálculos de layout innecesarios en las cartas
+sb-card {
+  display: block;
+  width: 100%;
+  height: 100%;
+  will-change: transform; // Avisa al navegador que esto se moverá
 }
 
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-  &::-webkit-scrollbar {
-    display: none;
+.safe-top { padding-top: env(safe-area-inset-top); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+.brightness-50 { filter: brightness(0.6); }
+
+// ==========================================
+// 1. DRAG & DROP PERFORMANCE (ZERO LAG)
+// ==========================================
+
+.cdk-drag-preview {
+  border-radius: 0.5rem;
+  // Sombra más pequeña y opaca rinde mejor que una difusa grande
+  box-shadow: none !important;
+  background: transparent !important;
+  border:none !important;
+
+  box-sizing: border-box;
+  z-index: 10000 !important;
+  pointer-events: none;
+  // Limpieza de variables para que vuele recto
+  --r: 0deg !important;
+  --tx: 0px !important;
+  --ty: 0px !important;
+  --lift: 0px !important;
+
+  // IMPORTANTE: Evitamos transiciones aquí para que el movimiento siga al dedo 1:1
+  transition: none !important;
+}
+
+// Ocultar original inmediatamente
+.cdk-drag-dragging {
+  opacity: 0 !important;
+}
+
+.cdk-drag-placeholder {
+  opacity: 0 !important;
+}
+
+/* SOLUCIÓN AL "VUELO RARO" (ISSUE #2):
+   Al poner transition: none, eliminamos la animación de retorno.
+   - Si aciertas: Desaparece al instante (lo que querías).
+   - Si fallas: Regresa al instante a tu mano (snappy).
+   Esto mejora masivamente la sensación de agilidad.
+*/
+.cdk-drag-animating {
+  transition: none !important;
+}
+
+// ==========================================
+// 2. FEEDBACK VISUAL (SIN ESCALA)
+// ==========================================
+
+// Solo borde naranja, sin cambiar tamaño (ISSUE #3)
+.cdk-drop-list-receiving {
+  .drop-highlight {
+    opacity: 1 !important;
+    // Usamos border simple en lugar de box-shadow difuso para rendimiento
+    border-color: #f97316 !important;
+    background-color: rgba(249, 115, 22, 0.1);
   }
 }
 
-/* 2. Contenedor de la Mano (Ajuste para centrado y tamaño real) */
-.hand-container {
-  display: flex;
-  justify-content: center; // Mantiene las cartas disponibles siempre al centro
-  align-items: flex-end;   // Apoya las cartas abajo para eliminar margen inferior extra
-  gap: 0.5rem;             // Espacio constante entre cartas (Tailwind gap-2)
-  min-height: 110px;       // Altura suficiente para que no salte al vaciarse
-  overflow: visible;       // Evita que las cartas se corten al animarse
+// Transiciones suaves solo para colores, no para geometría
+.common-pile-dropzone {
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
-/* 3. Animación de Entrada (Tu versión original intacta) */
-.animate-deal-card {
-  animation: dealFromDraw 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+// ==========================================
+// 3. ANIMACIONES LIGERAS
+// ==========================================
 
-  // Optimizamos solo para que el navegador sepa que va a haber movimiento
-  will-change: transform, opacity;
-}
-
-@keyframes dealFromDraw {
-  0% {
+// Animación de entrada con un ligero rebote "Pop"
+@keyframes dealSimple {
+  from {
     opacity: 0;
-    transform: translate(-100px, -300px) rotate(-15deg) scale(0.5);
-    filter: blur(4px);
+    // Empieza desplazada hacia abajo y un poco pequeña
+    transform: translateY(50px) scale(0.8);
   }
-  60% {
+  to {
     opacity: 1;
-    filter: blur(0);
-  }
-  100% {
-    opacity: 1;
-    transform: translate(0, 0) rotate(0) scale(1);
+    // Termina en su posición natural (rellenando al padre)
+    transform: translateY(0) scale(1);
   }
 }
+@keyframes zoomIn { from { opacity: 0; scale: 0.95; } to { opacity: 1; scale: 1; } }
+// Reducimos la complejidad del "Thinking" del oponente
+@keyframes opp-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
 
-/* Delays para cartas consecutivas (Tu lógica original) */
-.animate-deal-card:nth-child(2) { animation-delay: 0.1s; }
-.animate-deal-card:nth-child(3) { animation-delay: 0.2s; }
-.animate-deal-card:nth-child(4) { animation-delay: 0.4s; }
-.animate-deal-card:nth-child(5) { animation-delay: 0.5s; }
+.animate-deal-card {
+  // Usamos cubic-bezier para un efecto elástico suave
+  animation: dealSimple 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  will-change: transform, opacity; // Optimización de renderizado
+}
+.animate-bounce-slow {
+  animation: opp-float 3s ease-in-out infinite;
+  // Quitamos rotaciones complejas en animación continua
+}
 
-/* 4. Estados de la Carta (Hover y Selección) */
-.hand-card-wrapper {
-  transition: transform 0.2s ease-out; // Suaviza el re-centrado lateral y el hover
+.animate-modal-entry { animation: zoomIn 0.2s ease-out; }
 
-  &:hover {
-    transform: translateY(-8px);
-    z-index: 10;
+// ==========================================
+// 4. MANO (SIN EFECTO CLIC)
+// ==========================================
+
+.hand-container {
+  perspective: 1000px;
+  display: flex; justify-content: center;
+
+  .my-hand {
+    display: flex; justify-content: center; align-items: flex-end;
+
+    .hand-card {
+      --r: 0deg; --tx: 0px; --ty: 0px; --lift: 0px;
+
+      position: relative;
+      width: 3.5rem !important; height: 5.25rem !important;
+      flex-shrink: 0;
+      border-radius: 0.5rem;
+      box-shadow: -1px 1px 4px rgba(0,0,0,0.5); // Sombra más ligera
+      cursor: grab;
+
+      // Importante: will-change ayuda al navegador a separar esto en capas
+      will-change: transform;
+      backface-visibility: hidden;
+
+      // ELIMINADO: Transition-all causaba conflictos con DragDrop
+      // Solo transicionamos transform cuando NO se arrastra
+      transition: transform 0.2s ease;
+
+      &:active { cursor: grabbing; }
+
+      // Solo aplicamos transform si NO está siendo arrastrada por CDK
+      &:not(.cdk-drag-dragging) {
+        transform: rotate(var(--r)) translate(var(--tx), var(--ty));
+      }
+
+      // ELIMINADO: .is-selected (ISSUE #1)
+      // Ya no hay estilos de "levantamiento" al hacer click.
+    }
+
+    &.is-my-turn .hand-card {
+      // Simplifiqué levemente los cálculos del abanico
+      $fan-specs: (-10deg, 8px, -2px), (-5deg, 3px, 0), (0deg, 0, 0), (5deg, 3px, 0), (10deg, 8px, 2px);
+
+      @for $i from 1 through 5 {
+        &:nth-child(#{$i}) {
+          $spec: list.nth($fan-specs, $i);
+          --r: #{list.nth($spec, 1)};
+          --ty: #{list.nth($spec, 2)};
+          --tx: #{list.nth($spec, 3)};
+        }
+      }
+
+      // Ajustes para manos pequeñas
+      &:first-child:nth-last-child(3), &:first-child:nth-last-child(3) ~ .hand-card {
+        &:nth-child(1) { --r: -8deg; --ty: 5px; --tx: -8px; }
+        &:nth-child(2) { --r: 0deg; --ty: 0px; --tx: 0px; }
+        &:nth-child(3) { --r: 8deg; --ty: 5px; --tx: 8px; }
+      }
+      &:first-child:nth-last-child(2), &:first-child:nth-last-child(2) ~ .hand-card {
+        &:nth-child(1) { --r: -5deg; --tx: -4px; }
+        &:nth-child(2) { --r: 5deg; --tx: 4px; }
+      }
+    }
   }
 }
 
-/* Estilo de selección unificado */
-.is-selected {
-  transform: scale(1.05) translateY(-5px) !important;
-  z-index: 50;
-}
-
-
-// Animación de entrada (Pop-in)
-
-@keyframes modal-pop-in {
-  0% { opacity: 0; transform: scale(0.8); }
-  100% { opacity: 1; transform: scale(1); }
-}
-
-@keyframes progress {
-  from { width: 0%; }
-  to { width: 100%; }
-}
-
-.animate-modal-entry {
-  animation: modal-pop-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-}
-
-.animate-progress-bar {
-  animation: progress 5s linear forwards;
+.single-stack .cdk-drag-placeholder {
+  position: absolute !important;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1; // Detrás, por si acaso
 }

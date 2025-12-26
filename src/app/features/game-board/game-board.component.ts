@@ -1,4 +1,4 @@
-import { inject, computed, signal, Component, OnInit, OnDestroy, effect } from '@angular/core';
+import {inject, computed, signal, Component, OnInit, OnDestroy, effect, Inject, Renderer2} from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
 import { SocketService } from '../../core/services/socket.service';
@@ -7,50 +7,55 @@ import { CardComponent } from '../../shared/components/card/card.component';
 import { GameState } from '../../core/models/game.model.js';
 import { Subscription } from 'rxjs';
 import confetti from 'canvas-confetti';
+import { CdkDragDrop, DragDropModule } from '@angular/cdk/drag-drop';
+
+interface DragData {
+  source: 'hand' | 'goal' | 'discard';
+  cardId: string;
+  sourceIndex?: number;
+}
 
 @Component({
   selector: 'game-board',
   standalone: true,
-  imports: [CommonModule, CardComponent],
+  imports: [CommonModule, CardComponent, DragDropModule],
   templateUrl: './game-board.component.html',
   styleUrl: './game-board.component.scss',
 })
 export class GameBoardComponent implements OnInit, OnDestroy {
+  protected readonly Math = Math;
   private document = inject(DOCUMENT);
   private router = inject(Router);
   public socketService = inject(SocketService);
+
   public gameState = toSignal(this.socketService.gameState$);
 
-  // Nueva señal para controlar UI de conexión
   public isConnected = signal(true);
-
   public isCopied = signal(false);
+  // Estados de selección manual (click)
   public selectedSource = signal<'hand' | 'goal' | 'discard' | null>(null);
   public selectedIndex = signal<number | null>(null);
   public selectedCardId = signal<string | null>(null);
+
   public showWinnerModal = signal(false);
   public winnerName = signal<string>('');
-
+  public wasJustRecycled = signal(false);
+  private prevPending = 0;
   public gameErrorMessage: string | null = null;
   private errorSubscription!: Subscription;
-
-  public wasJustRecycled = false;
-  private prevPending = 0;
-
-
   private navigationTimeout: any;
 
   public isGameReady = computed(() => {
     const state = this.gameState();
-    return state?.status === 'playing' || (!!state?.opponent && state.opponent.id !== 'Opponent');
+    return !!state && (state.status === 'playing' || (!!state.opponent && state.opponent.id !== 'Opponent'));
   });
 
   public isMyTurn = computed(() => {
     const state = this.gameState();
-    return state?.currentPlayerId === state?.me.id;
+    return !!state && state.currentPlayerId === state.me.id;
   });
 
-  constructor() {
+  constructor(@Inject(DOCUMENT) privatedcument: Document, private renderer: Renderer2) {
     effect(() => {
       const state = this.gameState();
       if (!state) return;
@@ -61,7 +66,6 @@ export class GameBoardComponent implements OnInit, OnDestroy {
         this.showWinnerModal.set(true);
         if (isMe) this.launchCelebration();
 
-        // Limpiar partida de localStorage al terminar
         localStorage.removeItem('skipbo_current_game_id');
         this.navigationTimeout = setTimeout(() => this.router.navigate(['/']), 6000);
       }
@@ -70,29 +74,92 @@ export class GameBoardComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit() {
-    this.errorSubscription = this.socketService.error$.subscribe(msg => this.showTemporaryError(msg));
 
-    // Listeners para estado de conexión
+    // 1. Forzar overflow hidden al body para evitar rebotes
+    this.renderer.addClass(this.document.body, 'overflow-hidden');
+    this.renderer.addClass(this.document.body, 'fixed');
+    this.renderer.addClass(this.document.body, 'inset-0');
+
+    // 2. Corrección de altura para iOS/Android Chrome
+    this.fixViewportHeight();
+    window.addEventListener('resize', this.fixViewportHeight.bind(this));
+
+
+    this.errorSubscription = this.socketService.error$.subscribe(msg => this.showTemporaryError(msg));
     this.socketService.socket.on('connect', () => this.isConnected.set(true));
     this.socketService.socket.on('disconnect', () => this.isConnected.set(false));
+    this.document.addEventListener('visibilitychange', this.handleVisibility);
+  }
 
-    // Forzar reconexión al volver a la pestaña
-    this.document.addEventListener('visibilitychange', () => {
-      if (this.document.visibilityState === 'visible') {
-        if (!this.socketService.socket.connected) {
-          console.log("📱 Recuperando conexión...");
-          this.socketService.socket.connect();
-        }
-      }
-    });
+  private handleVisibility = () => {
+    if (this.document.visibilityState === 'visible' && !this.socketService.socket.connected) {
+      console.log("🔄 Resincronización forzada...");
+      this.socketService.socket.connect();
+    }
   }
 
   ngOnDestroy() {
+    window.removeEventListener('resize', this.fixViewportHeight.bind(this));
+    this.renderer.removeClass(this.document.body, 'overflow-hidden');
+    this.renderer.removeClass(this.document.body, 'fixed');
+    this.renderer.removeClass(this.document.body, 'inset-0');
+
     if (this.errorSubscription) this.errorSubscription.unsubscribe();
     if (this.navigationTimeout) clearTimeout(this.navigationTimeout);
-   // No desconectamos el socket aquí para permitir reconexión rápida
+    this.document.removeEventListener('visibilitychange', this.handleVisibility);
   }
 
+  // Ajusta una variable CSS con la altura real visible
+  private fixViewportHeight() {
+    const vh = window.innerHeight * 0.01;
+    document.documentElement.style.setProperty('--vh', `${vh}px`);
+  }
+
+
+  // --- LOGICA DRAG & DROP ---
+
+  public canDragPredicate = () => {
+    return this.isMyTurn() && !this.showWinnerModal();
+  };
+
+  /**
+   * Se ejecuta SOLO cuando soltamos válidamente en un DropList destino (Common Piles & Decard Piles)
+   */
+
+  /**
+   * Maneja el soltado de cartas tanto en Common Piles (Jugar) como en Discard Piles (Descartar)
+   */
+  public onDrop(event: CdkDragDrop<any>, targetIndex: number, destinationType: 'common' | 'discard') {
+    // Si soltamos en el mismo lugar de origen, ignoramos
+    if (event.previousContainer === event.container) return;
+
+    const data: DragData = event.item.data;
+
+    // Validaciones lógicas
+    if (destinationType === 'discard') {
+      // Solo se puede descartar desde la MANO
+      if (data.source !== 'hand') return;
+    }
+
+    // Efecto háptico
+    if ('vibrate' in navigator) navigator.vibrate(10);
+
+    if (destinationType === 'common') {
+      // Lógica de JUGAR carta
+      this.socketService.playCard({
+        cardId: data.cardId,
+        source: data.source,
+        targetIndex: targetIndex, // 0-3 (pilas comunes)
+        sourceIndex: data.sourceIndex
+      });
+    } else {
+      // Lógica de DESCARTAR carta
+      this.socketService.discard(targetIndex, data.cardId); // targetIndex 0-3 (slots de descarte)
+    }
+
+    this.clearSelection();
+  }
+  // --- Lógica Legacy (Click) ---
   selectFromHand(index: number, cardId: string) {
     if (!this.isMyTurn() || this.showWinnerModal()) return;
     this.setSelection('hand', index, cardId);
@@ -101,20 +168,23 @@ export class GameBoardComponent implements OnInit, OnDestroy {
   selectFromGoal() {
     if (!this.isMyTurn() || this.showWinnerModal()) return;
     const state = this.gameState();
-    if (!state || state.me.goalPile.length === 0) return;
+    if (!state || !state.me.goalPile?.length) return;
     this.setSelection('goal', 0, state.me.goalPile[state.me.goalPile.length - 1].id);
   }
 
   selectFromDiscard(slotIndex: number) {
     if (!this.isMyTurn() || this.showWinnerModal()) return;
     const state = this.gameState();
-    if (!state || state.me.discards[slotIndex].length === 0) return;
+    if (!state || !state.me.discards[slotIndex]?.length) return;
     const slot = state.me.discards[slotIndex];
     this.setSelection('discard', slotIndex, slot[slot.length - 1].id);
   }
 
   private setSelection(source: 'hand' | 'goal' | 'discard', index: number, cardId: string) {
-    if (this.selectedCardId() === cardId) { this.clearSelection(); return; }
+    if (this.selectedCardId() === cardId) {
+      this.clearSelection();
+      return;
+    }
     this.selectedSource.set(source);
     this.selectedIndex.set(index);
     this.selectedCardId.set(cardId);
@@ -138,6 +208,7 @@ export class GameBoardComponent implements OnInit, OnDestroy {
     if (!this.isMyTurn() || this.showWinnerModal()) return;
     const source = this.selectedSource();
     const cardId = this.selectedCardId();
+
     if (source === 'hand' && cardId) {
       this.socketService.discard(slotIndex, cardId);
       this.clearSelection();
@@ -148,18 +219,18 @@ export class GameBoardComponent implements OnInit, OnDestroy {
 
   private handleStateUpdate(newState: GameState) {
     if (this.prevPending >= 2 && newState.pilesToRecycleCount === 0) {
-      this.wasJustRecycled = true;
-      setTimeout(() => this.wasJustRecycled = false, 2500);
+      this.wasJustRecycled.set(true);
+      setTimeout(() => this.wasJustRecycled.set(false), 2500);
     }
-    this.prevPending = newState.pilesToRecycleCount;
+    this.prevPending = newState.pilesToRecycleCount || 0;
   }
 
   public getPileCounterClass() {
     const state = this.gameState();
-    if (!state) return 'bg-slate-800 text-pink-500';
-    if (this.wasJustRecycled) return 'bg-green-600 text-white scale-110';
-    if (state.pilesToRecycleCount >= 2) return 'bg-red-600 text-white animate-pulse';
-    return 'bg-slate-800 text-pink-500';
+    if (!state) return 'bg-slate-800 text-slate-500';
+    if (this.wasJustRecycled()) return 'bg-green-600 text-white scale-110 shadow-lg shadow-green-500/20';
+    if (state.pilesToRecycleCount >= 2) return 'bg-red-600 text-white animate-pulse shadow-lg shadow-red-500/20';
+    return 'bg-slate-800 text-orange-500 border border-white/5';
   }
 
   public clearSelection() {
@@ -173,9 +244,7 @@ export class GameBoardComponent implements OnInit, OnDestroy {
       await navigator.clipboard.writeText(gameId);
       this.isCopied.set(true);
       setTimeout(() => this.isCopied.set(false), 2000);
-    } catch (err) {
-      console.error("No se pudo copiar", err);
-    }
+    } catch (err) { console.error(err); }
   }
 
   public showTemporaryError(msg: string) {
@@ -184,7 +253,7 @@ export class GameBoardComponent implements OnInit, OnDestroy {
   }
 
   private launchCelebration() {
-    const duration = 4 * 1000;
+    const duration = 4000;
     const end = Date.now() + duration;
     const frame = () => {
       confetti({ particleCount: 3, angle: 60, spread: 55, origin: { x: 0 } });
@@ -193,9 +262,11 @@ export class GameBoardComponent implements OnInit, OnDestroy {
     };
     frame();
   }
+
+
+
+  onDropInVoid(event: CdkDragDrop<any>) {
+  }
+
 }
-
-
-
-
 

@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -9,7 +9,8 @@ import { filter, take } from 'rxjs';
   selector: 'sb-lobby',
   standalone: true,
   imports: [CommonModule, FormsModule],
-  templateUrl: './lobby.component.html'
+  templateUrl: './lobby.component.html',
+  styleUrl: './lobby.component.scss'
 })
 export class LobbyComponent {
   private socketService = inject(SocketService);
@@ -18,34 +19,38 @@ export class LobbyComponent {
   playerName: string = '';
   goalSize: number = 20;
   gameIdToJoin: string = '';
+  isPasted = signal(false);
+
+  async pasteCode() {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        this.gameIdToJoin = text.trim().toLowerCase();
+        this.isPasted.set(true);
+        setTimeout(() => this.isPasted.set(false), 2000);
+      }
+    } catch (err) {
+      console.error('Error al acceder al portapapeles', err);
+    }
+  }
 
   createGame() {
     if (!this.playerName.trim()) return;
 
-    console.log(`[Lobby] Creando partida para: ${this.playerName}`);
-
-    // 1. Nos preparamos para reaccionar al cambio de estado ANTES de emitir
     this.socketService.gameState$.pipe(
-      // Solo nos interesa si el estado tiene un gameId válido
       filter(state => !!state?.gameId),
-      // Nos desuscribimos automáticamente tras recibir el primero válido
       take(1)
     ).subscribe(state => {
-      console.log(`[Lobby] Partida detectada: ${state?.gameId}. Navegando...`);
       this.router.navigate(['/game', state?.gameId]);
     });
 
-    // 2. Emitimos la creación
     this.socketService.createGame(this.playerName, this.goalSize);
   }
 
   joinExistingGame() {
     const gId = this.gameIdToJoin.trim();
     if (this.playerName.trim() && gId) {
-      console.log(`[Lobby] Uniéndose a partida: ${gId}`);
       this.socketService.joinGame(gId, this.playerName);
-
-      // En el join, podemos navegar directamente ya que tenemos el ID
       this.router.navigate(['/game', gId]);
     }
   }
