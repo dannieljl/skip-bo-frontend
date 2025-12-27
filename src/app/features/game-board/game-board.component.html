@@ -14,7 +14,7 @@
     <div [class.blur-md]="!isGameReady() || !state"
          class="flex-col h-full w-full justify-between duration-700 ease-in-out pointer-events-none relative z-10">
 
-      <div class="shrink-0 flex flex-col pt-2 ">
+      <div class="shrink-0 flex flex-col pt-1 ">
         <header class="shrink-0 p-3 flex justify-between items-center pointer-events-auto">
           <h1 class="text-xl font-black text-orange-500 italic tracking-tighter">Skip-Bo</h1>
           <div class="flex gap-2">
@@ -31,22 +31,31 @@
             <div class="flex items-start pl-2 gap-3">
               <div class="flex flex-col items-center pl-2 gap-1">
                 <span class="text-[7px] font-black uppercase tracking-widest text-slate-500">Target</span>
-                <div class="relative group w-14 h-[84px]">
-                  <div class="absolute inset-0 bg-slate-800 rounded-lg translate-y-0.5 translate-x-0.5 border border-white/5"></div>
-                  <div class="relative z-10 w-full h-full">
-                    @if (state.opponent?.goalPile?.length) {
-                      @let topCardOpp = state.opponent!.goalPile[state.opponent!.goalPile.length - 1];
-                      <sb-card [card]="topCardOpp" class="w-full h-full shadow-lg rounded-lg"></sb-card>
-                    } @else {
-                      <div class="w-full h-full bg-slate-900/50 rounded-lg border border-dashed border-slate-700 flex items-center justify-center">
-                        <span class="text-slate-600 font-black text-[8px]">GOAL</span>
+                  <div class="relative group w-14 h-[84px]">
+                      <div class="absolute inset-0 bg-slate-800 rounded-lg translate-y-0.5 translate-x-0.5 border border-white/5"></div>
+
+                      <div class="relative z-10 w-full h-full">
+
+                          @if (state.opponent?.goalPile?.length) {
+                              @let topCardOpp = state.opponent!.goalPile[state.opponent!.goalPile.length - 1];
+
+                              @for (c of [topCardOpp]; track c.id) {
+                                  <div class="w-full h-full animate-flip">
+                                      <sb-card [card]="c" class="w-full h-full shadow-lg rounded-lg"></sb-card>
+                                  </div>
+                              }
+
+                          } @else {
+                              <div class="w-full h-full bg-slate-900/50 rounded-lg border border-dashed border-slate-700 flex items-center justify-center">
+                                  <span class="text-slate-600 font-black text-[8px]">GOAL</span>
+                              </div>
+                          }
+
+                          <div class="absolute -bottom-1.5 -right-1.5 bg-orange-500 text-white text-[9px] font-black w-5 h-5 rounded-full flex items-center justify-center border-2 border-slate-900 shadow-xl z-20">
+                              {{ state.opponent?.goalRemaining || 0 }}
+                          </div>
                       </div>
-                    }
-                    <div class="absolute -bottom-1.5 -right-1.5 bg-orange-500 text-white text-[9px] font-black w-5 h-5 rounded-full flex items-center justify-center border-2 border-slate-900 shadow-xl z-20">
-                      {{ state.opponent?.goalRemaining || 0 }}
-                    </div>
                   </div>
-                </div>
               </div>
               <div class="flex flex-col items-center gap-1">
                 <span class="text-[7px] font-black uppercase tracking-widest text-slate-500">Discards</span>
@@ -97,19 +106,17 @@
         <p class="text-slate-500 text-[8px] uppercase font-black tracking-[0.3em] mb-2">Common Board</p>
         <div class="flex justify-center items-center gap-1 w-full max-w-[340px]">
 
-          <div class="relative w-[72px] aspect-[2/3] flex-shrink-0 group pointer-events-auto">
-            <div class="absolute inset-0 bg-slate-800 rounded-lg translate-y-1 translate-x-1 border border-white/5 shadow-lg"></div>
+          <div class="relative w-[58px] h-[86px] flex-shrink-0 group pointer-events-auto">
+            <div class="absolute inset-0 bg-slate-800 rounded-lg translate-y-0.5 translate-x-0.5 border border-white/5 shadow-lg"></div>
             <div class="absolute inset-0 bg-slate-900 rounded-lg border-2 border-slate-700/50 flex flex-col items-center justify-center overflow-hidden shadow-2xl z-10">
-              <div class="absolute top-0 left-0 right-0 bg-slate-800/80 py-1 border-b border-white/5">
+              <div class="absolute top-0 left-0 right-0 bg-slate-800/80 py-0.5 border-b border-white/5">
                 <span class="text-[7px] text-slate-500 font-black uppercase tracking-tighter block text-center italic">Draw Pile</span>
               </div>
               <div class="flex flex-col items-center mt-2">
-                <span class="text-slate-400 font-black text-sm italic tracking-tighter leading-none drop-shadow-md">SKIP-BO</span>
+                <span class="text-slate-400 font-black text-xs italic tracking-tighter leading-none drop-shadow-md">SKIP-BO</span>
                 <div class="h-[1px] w-6 bg-orange-500/40 my-1.5 shadow-[0_0_5px_rgba(249,115,22,0.3)]"></div>
               </div>
-              <div class="absolute top-1 left-1 w-2 h-2 border-t border-l border-white/10"></div>
-              <div class="absolute bottom-1 right-1 w-2 h-2 border-b border-r border-white/10"></div>
-              <div class="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-transparent pointer-events-none"></div>
+             <div class="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-transparent pointer-events-none"></div>
             </div>
           </div>
 
@@ -128,14 +135,26 @@
 
                 <div class="absolute inset-0 rounded-lg border-2 border-orange-500 opacity-0 transition-opacity duration-150 z-50 pointer-events-none drop-highlight"></div>
 
-                <div class="w-full h-full flex items-center justify-center pointer-events-none">
-                  @if (pile?.length) {
-                    <sb-card [card]="pile[pile.length - 1]" [visualValueOverride]="pile.length"
-                             class="block w-full h-full"></sb-card>
-                  } @else {
-                    <span class="text-lg font-black text-slate-500 opacity-20 select-none">{{ i + 1 }}</span>
-                  }
-                </div>
+                  <div class="w-full h-full flex items-center justify-center pointer-events-none">
+                      @if (pile?.length) {
+                          @let topCard = pile[pile.length - 1];
+
+                          @for (c of [topCard]; track c.id) {
+
+                              <div class="w-full h-full"
+                                   [class.animate-opp-arrival]="state.currentPlayerId !== state.me.id">
+
+                                  <sb-card [card]="c"
+                                           [visualValueOverride]="pile.length"
+                                           class="block w-full h-full shadow-md rounded-lg">
+                                  </sb-card>
+                              </div>
+                          }
+
+                      } @else {
+                          <span class="text-lg font-black text-slate-500 opacity-20 select-none">{{ i + 1 }}</span>
+                      }
+                  </div>
               </div>
             }
           </div>
@@ -144,7 +163,7 @@
 
       <section class="shrink-0 py-4 pb-24 bg-slate-900/80 backdrop-blur-lg rounded-t-[2rem] border-t border-white/10 shadow-2xl z-30 pointer-events-none">
 
-        <div class="flex justify-center gap-4 px-1 items-start w-full overflow-visible">
+        <div class="flex justify-center pb-1 gap-4 px-1 items-start w-full overflow-visible">
 
           <div class="flex flex-col gap-2 shrink-0">
             <p class="text-orange-500 text-[8px] pb-3 font-black uppercase tracking-widest text-center">Target</p>
@@ -159,21 +178,33 @@
               @if (state.me?.goalPile?.length) {
                 @let goalCard = state.me.goalPile[state.me.goalPile.length - 1];
 
-                <div cdkDrag
-                     [cdkDragData]="{ source: 'goal', cardId: goalCard.id }"
-                     [cdkDragDisabled]="!canDragPredicate()"
-                     class="relative w-full h-full rounded-xl z-20 target-card">
+                  @if (state.me?.goalPile?.length) {
+                      @let goalCard = state.me.goalPile[state.me.goalPile.length - 1];
 
-                  <sb-card [card]="goalCard" class="block w-full h-full rounded-xl"></sb-card>
+                      <div cdkDrag
+                           [cdkDragData]="{ source: 'goal', cardId: goalCard.id, cardValue: goalCard.value }"
+                           [cdkDragDisabled]="!canDragPredicate()"
+                           class="relative w-full h-full rounded-xl z-20 target-card">
 
-                  <ng-template cdkDragPreview [matchSize]="true">
-                    <div class="w-full h-full shadow-2xl rounded-xl">
-                      <sb-card [card]="goalCard" class="block w-full h-full rounded-xl"></sb-card>
-                    </div>
-                  </ng-template>
+                          @for (g of [goalCard]; track g.id) {
+                              <div class="w-full h-full animate-flip"> <sb-card [card]="g" class="block w-full h-full rounded-xl"></sb-card>
+                              </div>
+                          }
 
-                  <div *cdkDragPlaceholder class="w-full h-full opacity-0"></div>
-                </div>
+                          <ng-template cdkDragPreview [matchSize]="true">
+                              <div class="w-full h-full shadow-2xl rounded-xl z-50"> <sb-card [card]="goalCard" class="block w-full h-full rounded-xl"></sb-card>
+                              </div>
+                          </ng-template>
+
+                          <div *cdkDragPlaceholder class="w-full h-full opacity-0"></div>
+                      </div>
+
+                      <div class="absolute inset-0 bg-slate-800 rounded-xl translate-y-1 translate-x-1 border border-white/5 z-0"></div>
+
+                      <div class="absolute -bottom-1.5 -right-1.5 bg-orange-500 text-white text-[9px] font-black w-5 h-5 rounded-full flex items-center justify-center border-2 border-slate-900 shadow-xl z-20">
+                          {{ state.me.goalRemaining || 0 }}
+                      </div>
+                  }
 
                 <div class="absolute inset-0 bg-slate-800 rounded-xl translate-y-1 translate-x-1 border border-white/5 z-0"></div>
 
@@ -207,7 +238,7 @@
 
                         @if (i === total - 1) {
                           <div cdkDrag
-                               [cdkDragData]="{ source: 'discard', cardId: card.id, sourceIndex: slotIdx }"
+                               [cdkDragData]="{ source: 'discard', cardId: card.id, sourceIndex: slotIdx, cardValue: card.value}"
                                [cdkDragDisabled]="!canDragPredicate()"
                                class="absolute left-0 right-0 w-full pointer-events-auto"
                                [style.bottom.px]="(total - 1 - i) * 21"
@@ -250,7 +281,7 @@
           </div>
         </div>
 
-        <div class="flex justify-center items-end pt-4 pb-2 px-4 w-full relative min-h-[100px] hand-container">
+        <div class="flex justify-center items-end  px-4 w-full relative min-h-[100px] hand-container">
           @if (state.me?.hand?.length) {
             <div cdkDropList
                  cdkDropListOrientation="horizontal"
@@ -260,7 +291,7 @@
                  [class.is-my-turn]="state.currentPlayerId === state.me.id">
               @for (card of state.me.hand; track card.id; let i = $index) {
                 <div cdkDrag
-                     [cdkDragData]="{ source: 'hand', cardId: card.id, sourceIndex: i }"
+                     [cdkDragData]="{ source: 'hand', cardId: card.id, sourceIndex: i,cardValue: card.value }"
                      [cdkDragDisabled]="!canDragPredicate()"
                      (click)="selectFromHand(i, card.id)"
                      [class.is-selected]="selectedSource() === 'hand' && selectedIndex() === i"
@@ -268,7 +299,7 @@
 
                   <sb-card [card]="card"
                            class="block w-full h-full rounded-lg pointer-events-none animate-deal-card"
-                           [style.animation-delay]="i * 50 + 'ms'">
+                           [style.animation-delay]="i * 90 + 'ms'">
                   </sb-card>
 
                   <ng-template cdkDragPreview [matchSize]="true">

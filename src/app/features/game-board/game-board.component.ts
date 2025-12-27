@@ -7,12 +7,13 @@ import { CardComponent } from '../../shared/components/card/card.component';
 import { GameState } from '../../core/models/game.model.js';
 import { Subscription } from 'rxjs';
 import confetti from 'canvas-confetti';
-import { CdkDragDrop, DragDropModule } from '@angular/cdk/drag-drop';
+import {CdkDragDrop, DragDropModule, moveItemInArray, transferArrayItem} from '@angular/cdk/drag-drop';
 
 interface DragData {
   source: 'hand' | 'goal' | 'discard';
   cardId: string;
   sourceIndex?: number;
+  cardValue: number | string;// Opcional, para cuando viene del descarte
 }
 
 @Component({
@@ -130,36 +131,78 @@ export class GameBoardComponent implements OnInit, OnDestroy {
   /**
    * Maneja el soltado de cartas tanto en Common Piles (Jugar) como en Discard Piles (Descartar)
    */
+  // Helper para validar reglas localmente (Pureza Matemática)
+  private isValidMove(cardValue: number | string, pile: any[]): boolean {
+    // 1. Detectar Comodines (Ajusta según tu backend: 'SB', 0, 'SKIP-BO')
+    const val = String(cardValue).toUpperCase();
+    const isWild = val === 'SB' || val === 'SKIP-BO' || cardValue === 0;
+
+    if (isWild) return true; // El comodín entra donde sea
+
+    // 2. Regla Matemática: Valor necesario = Tamaño de la pila + 1
+    const currentPileSize = pile ? pile.length : 0;
+    const neededValue = currentPileSize + 1;
+
+    // Usamos '==' para permitir comparar "5" (string) con 5 (number)
+    return cardValue == neededValue;
+  }
+
   public onDrop(event: CdkDragDrop<any>, targetIndex: number, destinationType: 'common' | 'discard') {
-    // Si soltamos en el mismo lugar de origen, ignoramos
-    if (event.previousContainer === event.container) return;
+    // 1. Validaciones básicas de CDK
+    if (!event.container.data || !event.previousContainer.data) return;
+    if (event.previousContainer === event.container && event.previousIndex === event.currentIndex) return;
 
     const data: DragData = event.item.data;
 
-    // Validaciones lógicas
-    if (destinationType === 'discard') {
-      // Solo se puede descartar desde la MANO
-      if (data.source !== 'hand') return;
+    // 2. VALIDACIÓN DE REGLAS (El Filtro Anti-Glitch)
+    if (destinationType === 'common') {
+      const targetPile = event.container.data;
+
+      // Si la matemática no cuadra, CANCELAMOS TODO.
+      // La carta regresa sola a su origen con una animación suave.
+      if (!this.isValidMove(data.cardValue, targetPile)) {
+        if ('vibrate' in navigator) navigator.vibrate(50); // Feedback de error
+        return;
+      }
     }
 
-    // Efecto háptico
+    // 3. VALIDACIÓN DE ORIGEN (Descarte)
+    if (destinationType === 'discard' && data.source !== 'hand') return;
+
+    // ----------------------------------------------------
+    // SI PASA AQUÍ, LA JUGADA ES VÁLIDA.
+    // HACEMOS OPTIMISTIC UI (Movimiento instantáneo)
+    // ----------------------------------------------------
+
+    if (event.previousContainer === event.container) {
+      moveItemInArray(event.container.data, event.previousIndex, event.currentIndex);
+    } else {
+      transferArrayItem(
+        event.previousContainer.data,
+        event.container.data,
+        event.previousIndex,
+        event.currentIndex
+      );
+    }
+
+    // Feedback táctil de éxito
     if ('vibrate' in navigator) navigator.vibrate(10);
 
+    // 4. Enviar al Servidor (Fuente de la Verdad)
     if (destinationType === 'common') {
-      // Lógica de JUGAR carta
       this.socketService.playCard({
         cardId: data.cardId,
         source: data.source,
-        targetIndex: targetIndex, // 0-3 (pilas comunes)
+        targetIndex: targetIndex,
         sourceIndex: data.sourceIndex
       });
     } else {
-      // Lógica de DESCARTAR carta
-      this.socketService.discard(targetIndex, data.cardId); // targetIndex 0-3 (slots de descarte)
+      this.socketService.discard(targetIndex, data.cardId);
     }
 
     this.clearSelection();
   }
+
   // --- Lógica Legacy (Click) ---
   selectFromHand(index: number, cardId: string) {
     if (!this.isMyTurn() || this.showWinnerModal()) return;

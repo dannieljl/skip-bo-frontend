@@ -33,7 +33,7 @@ export interface MoveData {
   cardId: string;          // <--- Asegúrate de que esté aquí
   source: 'hand' | 'goal' | 'discard';
   targetIndex: number;
-  sourceIndex?: number;    // Opcional, para cuando viene del descarte
+  sourceIndex?: number;
 }
 
 export interface TieBreakerState {

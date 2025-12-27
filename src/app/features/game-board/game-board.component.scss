@@ -94,23 +94,50 @@ sb-card {
   transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
+
 // ==========================================
-// 3. ANIMACIONES LIGERAS
+// 3. ANIMACIONES LIGERAS (ACTUALIZADO)
 // ==========================================
 
-// Animación de entrada con un ligero rebote "Pop"
-@keyframes dealSimple {
-  from {
+// ==========================================
+// ANIMACIÓN: DRAW FROM PILE (CORREGIDA)
+// ==========================================
+
+@keyframes drawFromPile {
+  0% {
     opacity: 0;
-    // Empieza desplazada hacia abajo y un poco pequeña
-    transform: translateY(50px) scale(0.8);
+    // X: -40vw -> Mueve el punto de origen hacia la izquierda (donde está el mazo)
+    // Y: -55vh -> Mueve el punto de origen hacia arriba (zona media del tablero)
+    // Scale 0.4 -> Empieza pequeña para dar profundidad
+    transform: translate3d(-25vw, -55vh, 0) scale(0.4);
   }
-  to {
+
+  60% {
     opacity: 1;
-    // Termina en su posición natural (rellenando al padre)
-    transform: translateY(0) scale(1);
+    // Sobrepasa un poco (efecto rebote) pero ya centrada en X
+    transform: translate3d(0, 15px, 0) scale(1.05);
+  }
+
+  100% {
+    opacity: 1;
+    // Aterriza suavemente en su posición final
+    transform: translate3d(0, 0, 0) scale(1);
   }
 }
+
+.animate-deal-card {
+  // Ajustamos el tiempo a 0.5s para que se sienta ágil en móviles
+  // Cubic-bezier: Salida explosiva (draw rápido), frenada suave en la mano
+  animation: drawFromPile 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+
+  // OPTIMIZACIÓN MÓVIL CRÍTICA:
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+
+  // Esto evita que la carta se vea borrosa durante el vuelo en algunos Android
+  perspective: 1000px;
+}
+
 @keyframes zoomIn { from { opacity: 0; scale: 0.95; } to { opacity: 1; scale: 1; } }
 // Reducimos la complejidad del "Thinking" del oponente
 @keyframes opp-float {
@@ -118,11 +145,6 @@ sb-card {
   50% { transform: translateY(-3px); }
 }
 
-.animate-deal-card {
-  // Usamos cubic-bezier para un efecto elástico suave
-  animation: dealSimple 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-  will-change: transform, opacity; // Optimización de renderizado
-}
 .animate-bounce-slow {
   animation: opp-float 3s ease-in-out infinite;
   // Quitamos rotaciones complejas en animación continua
@@ -130,50 +152,90 @@ sb-card {
 
 .animate-modal-entry { animation: zoomIn 0.2s ease-out; }
 
+
 // ==========================================
-// 4. MANO (SIN EFECTO CLIC)
+// 4. MANO (FINAL TOUCH: POSICIÓN Y ALTURA)
 // ==========================================
 
 .hand-container {
-  perspective: 1000px;
-  display: flex; justify-content: center;
+  // POSICIONAMIENTO
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+
+  // [AJUSTE 1] Altura exacta para cubrir cartas + arco, sin tocar descartes
+  height: 100px;
+
+  z-index: 20;
+
+  // Alineación al fondo
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+
+  // [AJUSTE 2] ELIMINAMOS PADDING INFERIOR
+  // Al poner esto en 0, las cartas bajan hasta tocar el borde inferior de la pantalla.
+  // Si las quieres subir un pixel o dos, pon 2px o 4px aquí.
+  padding-bottom: 0px;
+
+  pointer-events: none;
 
   .my-hand {
-    display: flex; justify-content: center; align-items: flex-end;
+    pointer-events: auto;
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+
+    height: 100%;
+    overflow: visible; // Permite que el arco sobresalga visualmente
+    outline: none;
+
+    // === PROTECCIÓN ANTI-SHAKE ===
+    &.cdk-drop-list-dragging .hand-card {
+      transition: none !important;
+    }
 
     .hand-card {
-      --r: 0deg; --tx: 0px; --ty: 0px; --lift: 0px;
+      --r: 0deg; --tx: 0px; --ty: 0px;
 
       position: relative;
-      width: 3.5rem !important; height: 5.25rem !important;
+      width: 3.5rem !important;
+      height: 5.25rem !important;
       flex-shrink: 0;
+
+      will-change: transform;
+      transform: translateZ(0);
+
       border-radius: 0.5rem;
-      box-shadow: -1px 1px 4px rgba(0,0,0,0.5); // Sombra más ligera
+      box-shadow: -2px 2px 5px rgba(0,0,0,0.5);
       cursor: grab;
 
-      // Importante: will-change ayuda al navegador a separar esto en capas
-      will-change: transform;
-      backface-visibility: hidden;
+      // [OPCIONAL] Si quieres bajarlas aún más (incluso cortarlas un poco),
+      // puedes usar un margin-bottom negativo aquí.
+      // margin-bottom: -10px;
 
-      // ELIMINADO: Transition-all causaba conflictos con DragDrop
-      // Solo transicionamos transform cuando NO se arrastra
-      transition: transform 0.2s ease;
+      transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1);
 
       &:active { cursor: grabbing; }
 
-      // Solo aplicamos transform si NO está siendo arrastrada por CDK
       &:not(.cdk-drag-dragging) {
         transform: rotate(var(--r)) translate(var(--tx), var(--ty));
       }
-
-      // ELIMINADO: .is-selected (ISSUE #1)
-      // Ya no hay estilos de "levantamiento" al hacer click.
     }
 
-    &.is-my-turn .hand-card {
-      // Simplifiqué levemente los cálculos del abanico
-      $fan-specs: (-10deg, 8px, -2px), (-5deg, 3px, 0), (0deg, 0, 0), (5deg, 3px, 0), (10deg, 8px, 2px);
+    // El resto de configuraciones (Z-Index drag, Placeholder, Fan) siguen igual...
+    .cdk-drag-preview { z-index: 9999 !important; pointer-events: none; }
 
+    .cdk-drag-placeholder {
+      opacity: 0 !important;
+      transform: rotate(var(--r)) translate(var(--tx), var(--ty));
+      transition: none !important;
+    }
+
+    // Lógica del abanico (Mismo código de antes)
+    &.is-my-turn .hand-card {
+      $fan-specs: (-12deg, 10px, -4px), (-6deg, 4px, -1px), (0deg, 0, 0), (6deg, 4px, 1px), (12deg, 10px, 4px);
       @for $i from 1 through 5 {
         &:nth-child(#{$i}) {
           $spec: list.nth($fan-specs, $i);
@@ -182,16 +244,19 @@ sb-card {
           --tx: #{list.nth($spec, 3)};
         }
       }
-
-      // Ajustes para manos pequeñas
       &:first-child:nth-last-child(3), &:first-child:nth-last-child(3) ~ .hand-card {
-        &:nth-child(1) { --r: -8deg; --ty: 5px; --tx: -8px; }
+        &:nth-child(1) { --r: -8deg; --ty: 5px; --tx: -5px; }
         &:nth-child(2) { --r: 0deg; --ty: 0px; --tx: 0px; }
-        &:nth-child(3) { --r: 8deg; --ty: 5px; --tx: 8px; }
+        &:nth-child(3) { --r: 8deg; --ty: 5px; --tx: 5px; }
       }
       &:first-child:nth-last-child(2), &:first-child:nth-last-child(2) ~ .hand-card {
-        &:nth-child(1) { --r: -5deg; --tx: -4px; }
-        &:nth-child(2) { --r: 5deg; --tx: 4px; }
+        &:nth-child(1) { --r: -5deg; --tx: -3px; }
+        &:nth-child(2) { --r: 5deg; --tx: 3px; }
+      }
+      &:only-child {
+        --r: 0deg !important;  // Totalmente recta
+        --tx: 0px !important;  // Centrada
+        --ty: 0px !important;  // Sin elevación extra
       }
     }
   }
@@ -204,4 +269,66 @@ sb-card {
   width: 100%;
   height: 100%;
   z-index: -1; // Detrás, por si acaso
+}
+
+// ==========================================
+// ANIMACIÓN: VERTICAL FLIP (Estilo Mazo)
+// ==========================================
+
+@keyframes vertical-flip-in {
+  0% {
+    opacity: 0;
+    // rotateX(90deg): La carta comienza "acostada" o plana.
+    // scale(0.9): Empieza un poco más pequeña para dar profundidad.
+    transform: perspective(1000px) rotateX(90deg) scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    // rotateX(0deg): Termina de pie, frente al usuario.
+    transform: perspective(1000px) rotateX(0deg) scale(1);
+  }
+}
+
+.animate-flip {
+  // Mantenemos 0.4s para sobriedad y rapidez
+  animation: vertical-flip-in 0.7s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+
+  // IMPORTANTE: El origen debe ser el centro para que rote sobre su propio eje
+  transform-origin: center center;
+
+  // Optimizaciones de GPU
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+}
+
+
+// ==========================================
+// ANIMACIÓN: LLEGADA DEL RIVAL (OPPONENT DROP)
+// ==========================================
+
+@keyframes opponent-drop-snap {
+  0% {
+    opacity: 0;
+    // Empieza 150px arriba (zona rival) y un poco estirada verticalmente (motion blur falso)
+    transform: translate3d(0, -150px, 0) scale(0.9, 1.2);
+  }
+  40% {
+    opacity: 1;
+    // Cae un poco más abajo de su destino (rebote)
+    transform: translate3d(0, 10px, 0) scale(1.05, 0.95);
+  }
+  100% {
+    opacity: 1;
+    // Posición final exacta
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+.animate-opp-arrival {
+  // Duración corta (0.4s) para mantener el juego fluido (Snappy)
+  animation: opponent-drop-snap 1s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+
+  transform-origin: center top;
+  will-change: transform, opacity;
+  z-index: 50; // Asegura que vuele por encima de otras cosas si es necesario
 }
