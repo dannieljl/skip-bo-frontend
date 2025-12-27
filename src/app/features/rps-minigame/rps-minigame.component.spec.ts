@@ -1,18 +1,18 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
-import { LobbyComponent } from './lobby.component.js';
+import { RpsMinigameComponent } from './rps-minigame.component.js';
 
-describe('Lobby', () => {
-  let component: LobbyComponent;
-  let fixture: ComponentFixture<LobbyComponent>;
+describe('RpsMinigameComponent', () => {
+  let component: RpsMinigameComponent;
+  let fixture: ComponentFixture<RpsMinigameComponent>;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [LobbyComponent]
+      imports: [RpsMinigameComponent]
     })
     .compileComponents();
 
-    fixture = TestBed.createComponent(LobbyComponent);
+    fixture = TestBed.createComponent(RpsMinigameComponent);
     component = fixture.componentInstance;
     await fixture.whenStable();
   });

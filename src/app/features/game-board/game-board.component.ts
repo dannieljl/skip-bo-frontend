@@ -1,4 +1,4 @@
-import {inject, computed, signal, Component, OnInit, OnDestroy, effect, Inject, Renderer2} from '@angular/core';
+import {inject, computed, signal, Component, OnInit, OnDestroy, effect, Inject, Renderer2, Input} from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
 import { SocketService } from '../../core/services/socket.service';
@@ -23,6 +23,8 @@ interface DragData {
   styleUrl: './game-board.component.scss',
 })
 export class GameBoardComponent implements OnInit, OnDestroy {
+  @Input({ required: true }) statev!: GameState;
+
   protected readonly Math = Math;
   private document = inject(DOCUMENT);
   private router = inject(Router);
@@ -31,7 +33,6 @@ export class GameBoardComponent implements OnInit, OnDestroy {
   public gameState = toSignal(this.socketService.gameState$);
 
   public isConnected = signal(true);
-  public isCopied = signal(false);
   // Estados de selección manual (click)
   public selectedSource = signal<'hand' | 'goal' | 'discard' | null>(null);
   public selectedIndex = signal<number | null>(null);
@@ -55,7 +56,7 @@ export class GameBoardComponent implements OnInit, OnDestroy {
     return !!state && state.currentPlayerId === state.me.id;
   });
 
-  constructor(@Inject(DOCUMENT) privatedcument: Document, private renderer: Renderer2) {
+  constructor(@Inject(DOCUMENT) privatedocument: Document, private renderer: Renderer2) {
     effect(() => {
       const state = this.gameState();
       if (!state) return;
@@ -239,13 +240,6 @@ export class GameBoardComponent implements OnInit, OnDestroy {
     this.selectedCardId.set(null);
   }
 
-  async copyCode(gameId: string) {
-    try {
-      await navigator.clipboard.writeText(gameId);
-      this.isCopied.set(true);
-      setTimeout(() => this.isCopied.set(false), 2000);
-    } catch (err) { console.error(err); }
-  }
 
   public showTemporaryError(msg: string) {
     this.gameErrorMessage = msg;

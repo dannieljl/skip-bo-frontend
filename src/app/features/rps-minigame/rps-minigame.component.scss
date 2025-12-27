@@ -1,0 +1,13 @@
+// En rps-minigame.component.ts
+
+:host { display: block; width: 100%; }
+
+/* Animación de carga de 3 segundos exacta */
+@keyframes loadProgress {
+  from { width: 0%; }
+  to { width: 100%; }
+}
+
+.animate-progress {
+  animation: loadProgress 3s linear forwards;
+}

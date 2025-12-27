@@ -1,0 +1,86 @@
+<div class="h-full w-full bg-slate-900/95 flex flex-col items-center justify-center p-6 relative overflow-hidden">
+
+  <div class="flex flex-col items-center gap-6 mb-8">
+    <div class="text-center">
+      <h2 class="text-4xl font-black text-orange-500 italic uppercase tracking-tighter">Tie Breaker</h2>
+      <p class="text-xs font-bold text-slate-400 tracking-[0.3em] uppercase mt-1">Same Objective Card</p>
+    </div>
+
+    <div class="flex items-center gap-6 opacity-90">
+      <div class="flex flex-col items-center gap-2">
+        <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">YOU</span>
+        <div class="w-14 h-[86px] flex items-center justify-center">
+          @if(myGoalCard) { <sb-card [card]="myGoalCard" class="block w-14 h-[86px] shadow-lg rounded-lg"></sb-card> }
+        </div>
+      </div>
+      <span class="text-xl font-black text-slate-600">VS</span>
+      <div class="flex flex-col items-center gap-2">
+        <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Opponent</span>
+        <div class="w-14 h-[86px] flex items-center justify-center">
+          @if(oppGoalCard) { <sb-card [card]="oppGoalCard" class="block w-14 h-[86px] shadow-lg rounded-lg"></sb-card> }
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="w-full max-w-sm bg-slate-800/50 backdrop-blur-md rounded-[2rem] p-6 border border-white/5 shadow-2xl relative overflow-hidden">
+
+    @if (tieBreaker.lastResult) {
+      <div class="absolute inset-0 z-50 flex flex-col items-center justify-center bg-slate-900/95 backdrop-blur-xl animate-in fade-in duration-300 p-6">
+
+        <h3 class="text-3xl font-bold uppercase text-center leading-none mb-2 tracking-tighter"
+            [ngClass]="{
+              'text-green-500': statusMessage().includes('WIN'),
+              'text-red-600': statusMessage().includes('LOSE'),
+              'text-yellow-400': statusMessage().includes('TIE')
+            }">
+          {{ statusMessage() }}
+        </h3>
+
+        @if (tieBreaker.lastResult === 'draw') {
+          <div class="flex flex-col items-center w-full max-w-[200px] gap-2 mt-4">
+            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Analyzing Next Round</p>
+
+            <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden border border-white/10">
+              <div class="h-full bg-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.5)] animate-progress rounded-full"></div>
+            </div>
+          </div>
+        }
+
+        @if (tieBreaker.lastResult !== 'draw') {
+          <p class="text-xs text-slate-500 mt-2 font-bold tracking-widest animate-pulse">STARTING GAME...</p>
+        }
+
+
+      </div>
+    }
+
+    <div class="grid grid-cols-3 gap-3 relative z-10">
+      @for (opt of ['rock', 'paper', 'scissors']; track opt) {
+        <button (click)="selectOption($any(opt))"
+                [disabled]="!!localSelection()"
+                class="aspect-square rounded-2xl flex flex-col items-center justify-center gap-2 transition-all active:scale-95 border-b-4 disabled:opacity-50 disabled:grayscale"
+                [ngClass]="{
+                  'bg-pink-600 border-pink-800': opt === 'rock',
+                  'bg-green-600 border-green-800': opt === 'paper',
+                  'bg-blue-600 border-blue-800': opt === 'scissors',
+                  'ring-4 ring-white scale-105 z-20 shadow-xl': localSelection() === opt,
+                  'opacity-40 scale-90': localSelection() && localSelection() !== opt
+                }">
+          <span class="text-3xl filter drop-shadow-md">
+            {{ opt === 'rock' ? '🪨' : (opt === 'paper' ? '📄' : '✂️') }}
+          </span>
+        </button>
+      }
+    </div>
+
+    <div class="mt-6 text-center h-4 flex items-center justify-center">
+      <p class="text-[10px] font-bold uppercase tracking-[0.2em] animate-pulse transition-colors duration-300"
+         [class.text-orange-400]="localSelection() && !tieBreaker.lastResult"
+         [class.text-slate-500]="!localSelection()">
+        {{ statusMessage() }}
+      </p>
+    </div>
+
+  </div>
+</div>
